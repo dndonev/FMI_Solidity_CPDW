@@ -1,3 +1,3 @@
 # FMI_Solidity_CPDW
-# Copy paste done wrong!
+# CPDW - Copy Paste Done Wrong!
 A FMI project for the BlockChain course including JS and Solidity
