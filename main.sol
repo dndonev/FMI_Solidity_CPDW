@@ -13,12 +13,17 @@ contract CopyPasteDoneWrong {
     }
 
     address private owner;
-    event OwnerSet(address indexed oldOwner, address indexed newOwner);
+    mapping(string => Picture) private database;
+    mapping(address => string[]) private ownerPicture;
+    mapping(address => string[]) private buyers;
+    mapping(string => Picture) private exists;
 
     modifier isOwner() {
         require(msg.sender == owner, "Caller is not owner");
         _;
     }
+
+    event OwnerSet(address indexed oldOwner, address indexed newOwner);
 
     constructor() {
         owner = msg.sender;
