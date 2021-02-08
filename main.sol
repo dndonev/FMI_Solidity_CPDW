@@ -12,11 +12,14 @@ contract CopyPasteDoneWrong {
         string id;
     }
 
-    address private owner;
-    mapping(string => Picture) private database;
-    mapping(address => string[]) private ownerPicture;
-    mapping(address => string[]) private buyers;
+    address payable private owner;
+    mapping(string => Picture) private availablePictures;
+    mapping(address => Picture[]) private ownerPictures;
+    mapping(address => Picture[]) private buyerPictures;
     mapping(string => Picture) private exists;
+    string[] private pictures;
+    address[] private owners;
+    address[] private buyers;
 
     modifier isOwner() {
         require(msg.sender == owner, "Caller is not owner");
@@ -32,23 +35,66 @@ contract CopyPasteDoneWrong {
 
     /**
      * @dev Add a picture to the mapping.
-     * @param pictureFile the hash of the file.
-     * @param picturePrice the price of the picture.
+     * @param file the hash of the file.
+     * @param price the price of the picture.
      * @param forSale is it for sale.
      * @param id picture's id.
      */
     function addPicture(
-        string memory pictureFile,
-        uint256 picturePrice,
+        string memory file,
+        uint256 price,
         bool forSale,
         string memory id
-    ) public {}
+    ) public {
+        address pictureOwner = msg.sender;
+        uint256 usagePrice = price / 2;
+        Picture memory pictureToAdd =
+            Picture({
+                ownershipPrice: price,
+                usagePrice: usagePrice,
+                forSale: forSale,
+                ownerId: owner,
+                id: "asdf",
+                transferable: true
+            });
+
+        availablePictures[id] = pictureToAdd;
+        Picture[] storage ownedPictures = ownerPictures[pictureOwner];
+        ownedPictures.push(pictureToAdd);
+        ownerPictures[pictureOwner] = ownedPictures;
+        pictures.push(pictureToAdd); // dunno why does not find .push()
+    }
 
     /**
      * @dev Buyer gets ownership.
      * @param pictureId the id of the demanded picture.
      */
-    function buyPicture(string memory pictureId) external payable {}
+    function buyPicture(string memory pictureId) external payable {
+        require(pictures.length > 0, "No pictures available");
+
+        address buyer = msg.sender;
+        uint256 value = msg.value;
+
+        if (availablePictures[pictureId].ownershipPrice == value) {
+            transferOwnership(payable(buyer), pictureId, value);
+        }
+    }
+
+    /**
+     * @dev Transfers the ownership to the buyer.
+     * @param newOwnerID The address of the buyer.
+     * @param pictureId The id of the picture.
+     */
+    function transferOwnership(
+        address payable newOwnerID,
+        string memory pictureId,
+        uint256 price
+    ) public {
+        owner.transfer(price);
+        owner = newOwnerID;
+        emit OwnerSet(address(0), owner);
+        ownerPictures[owner].push(pictureId);
+    }
 
     /**
      * @dev Gets owned pictures.
@@ -94,15 +140,6 @@ contract CopyPasteDoneWrong {
     function setForSale(string memory pictureId, bool newStatus)
         external
         isOwner
-    {}
-
-    /**
-     * @dev Transfers the ownership to the buyer.
-     * @param newOwnerID The address of the buyer.
-     * @param pictureId The id of the picture.
-     */
-    function transferOwnership(address newOwnerID, string memory pictureId)
-        public
     {}
 
     /**
