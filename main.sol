@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: FMI, Introduction to BlockChain 2021
-pragma solidity >=0.6.6 <0.8.0;
+pragma solidity ^0.7.4;
 pragma experimental ABIEncoderV2;
 
 contract CopyPasteDoneWrong {
@@ -17,7 +17,7 @@ contract CopyPasteDoneWrong {
     mapping(address => Picture[]) private ownerPictures;
     mapping(address => Picture[]) private buyerPictures;
     mapping(string => Picture) private exists;
-    string[] private pictures;
+    Picture[] private pictures;
     address[] private owners;
     address[] private buyers;
 
@@ -54,15 +54,13 @@ contract CopyPasteDoneWrong {
                 usagePrice: usagePrice,
                 forSale: forSale,
                 ownerId: owner,
-                id: "asdf",
+                id: file,
                 transferable: true
             });
 
         availablePictures[id] = pictureToAdd;
-        Picture[] storage ownedPictures = ownerPictures[pictureOwner];
-        ownedPictures.push(pictureToAdd);
-        ownerPictures[pictureOwner] = ownedPictures;
-        pictures.push(pictureToAdd); // dunno why does not find .push()
+
+        pushOwnerPicture(pictureToAdd, pictureOwner);
     }
 
     /**
@@ -74,43 +72,52 @@ contract CopyPasteDoneWrong {
 
         address buyer = msg.sender;
         uint256 value = msg.value;
+        Picture memory wantedPicture = getPictureById(pictureId);
 
         if (availablePictures[pictureId].ownershipPrice == value) {
-            transferOwnership(payable(buyer), pictureId, value);
+            transferOwnership(payable(buyer), wantedPicture, value);
         }
     }
 
     /**
      * @dev Transfers the ownership to the buyer.
      * @param newOwnerID The address of the buyer.
-     * @param pictureId The id of the picture.
+     * @param picture The picture to be bought.
+     * @param price The price of the picture.
      */
     function transferOwnership(
         address payable newOwnerID,
-        string memory pictureId,
+        Picture memory picture,
         uint256 price
     ) public {
         owner.transfer(price);
+        emit OwnerSet(owner, newOwnerID);
         owner = newOwnerID;
-        emit OwnerSet(address(0), owner);
-        ownerPictures[owner].push(pictureId);
+
+        pushBuyerPicture(picture, owner);
     }
 
     /**
      * @dev Gets owned pictures.
      */
-    function getOwnedPictures() public returns (string[] memory) {}
+    function getOwnedPictures() public view returns (Picture[] memory) {
+        return ownerPictures[owner];
+    }
 
     /**
      * @dev Gets bought pictures.
      */
-    function getBoughtPictures() public returns (string[] memory) {}
+    function getBoughtPictures() public view returns (Picture[] memory) {
+        address caller = msg.sender;
+        return buyerPictures[caller];
+    }
 
     /**
      * @dev Gets last N pictures.
      */
     function getLastNPictures(uint256 count)
         public
+        view
         returns (Picture[] memory)
     {}
 
@@ -147,4 +154,55 @@ contract CopyPasteDoneWrong {
      * @param pictureId The id of the picture to be deleted.
      */
     function deletePicture(string memory pictureId) public isOwner {}
+
+    /**
+     * @dev Helper function to push a picture into a key/value
+     * @param pictureToAdd The picture to be added.
+     * @param pictureOwner The address of the owner.
+     */
+    function pushOwnerPicture(Picture memory pictureToAdd, address pictureOwner)
+        private
+    {
+        Picture[] storage ownedPictures = ownerPictures[pictureOwner];
+        ownedPictures.push(pictureToAdd);
+        ownerPictures[pictureOwner] = ownedPictures;
+        pictures.push(pictureToAdd);
+    }
+
+    /**
+     * @dev Helper function to push a picture into a key/value
+     * @param pictureToAdd The picture to be added.
+     * @param pictureOwner The address of the owner.
+     */
+    function pushBuyerPicture(Picture memory pictureToAdd, address pictureOwner)
+        private
+    {
+        Picture[] storage ownedPictures = buyerPictures[pictureOwner];
+        ownedPictures.push(pictureToAdd);
+        ownerPictures[pictureOwner] = ownedPictures;
+        pictures.push(pictureToAdd);
+    }
+
+    /**
+     * @dev Gets a picture by id.
+     * @param pictureId The picture's id.
+     */
+    function getPictureById(string memory pictureId)
+        private
+        view
+        returns (Picture memory)
+    {
+        Picture memory wantedPicture;
+
+        for (uint256 index = 0; index < pictures.length; index++) {
+            if (
+                keccak256(abi.encodePacked(pictures[index].id)) ==
+                keccak256(abi.encodePacked(pictureId))
+            ) {
+                wantedPicture = pictures[index];
+            }
+        }
+
+        return wantedPicture;
+    }
 }
