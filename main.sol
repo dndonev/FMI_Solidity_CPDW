@@ -12,6 +12,13 @@ contract CopyPasteDoneWrong {
         string id;
     }
 
+    modifier isOwner() {
+        require(msg.sender == owner, "Caller is not owner");
+        _;
+    }
+
+    event OwnerSet(address indexed oldOwner, address indexed newOwner);
+
     address payable private owner;
     mapping(string => Picture) private availablePictures;
     mapping(address => Picture[]) private ownerPictures;
@@ -21,13 +28,6 @@ contract CopyPasteDoneWrong {
     address[] private owners;
     address[] private buyers;
 
-    modifier isOwner() {
-        require(msg.sender == owner, "Caller is not owner");
-        _;
-    }
-
-    event OwnerSet(address indexed oldOwner, address indexed newOwner);
-
     constructor() {
         owner = msg.sender;
         emit OwnerSet(address(0), owner);
@@ -35,30 +35,29 @@ contract CopyPasteDoneWrong {
 
     /**
      * @dev Add a picture to the mapping.
-     * @param file the hash of the file.
+     * @param fileHash the hash of the file.
      * @param price the price of the picture.
      * @param forSale is it for sale.
-     * @param id picture's id.
      */
     function addPicture(
-        string memory file,
+        string memory fileHash,
         uint256 price,
-        bool forSale,
-        string memory id
+        bool forSale
     ) public {
         address pictureOwner = msg.sender;
         uint256 usagePrice = price / 2;
+
         Picture memory pictureToAdd =
             Picture({
                 ownershipPrice: price,
                 usagePrice: usagePrice,
                 forSale: forSale,
                 ownerId: owner,
-                id: file,
+                id: fileHash,
                 transferable: true
             });
 
-        availablePictures[id] = pictureToAdd;
+        availablePictures[fileHash] = pictureToAdd;
 
         pushOwnerPicture(pictureToAdd, pictureOwner);
     }
@@ -76,6 +75,23 @@ contract CopyPasteDoneWrong {
 
         if (availablePictures[pictureId].ownershipPrice == value) {
             transferOwnership(payable(buyer), wantedPicture, value);
+        }
+    }
+
+    /**
+     * @dev Buyer rents ownership.
+     * @param pictureId the id of the demanded picture.
+     */
+    function rentPicture(string memory pictureId) external payable {
+        require(pictures.length > 0, "No pictures available");
+
+        address buyer = msg.sender;
+        uint256 value = msg.value;
+        Picture memory wantedPicture = getPictureById(pictureId);
+
+        if (availablePictures[pictureId].usagePrice == value) {
+            pushBuyerPicture(wantedPicture, buyer);
+            owner.transfer(value);
         }
     }
 
@@ -100,14 +116,18 @@ contract CopyPasteDoneWrong {
     /**
      * @dev Gets owned pictures.
      */
-    function getOwnedPictures() public view returns (Picture[] memory) {
+    function getOwnedPictures() external view returns (Picture[] memory) {
+        require(pictures.length > 0, "No pictures available");
+
         return ownerPictures[owner];
     }
 
     /**
      * @dev Gets bought pictures.
      */
-    function getBoughtPictures() public view returns (Picture[] memory) {
+    function getBoughtPictures() external view returns (Picture[] memory) {
+        require(pictures.length > 0, "No pictures available");
+
         address caller = msg.sender;
         return buyerPictures[caller];
     }
@@ -119,25 +139,68 @@ contract CopyPasteDoneWrong {
         public
         view
         returns (Picture[] memory)
-    {}
+    {
+        Picture[] memory lastPictures;
+
+        for (
+            uint256 index = pictures.length - count - 1;
+            index < pictures.length;
+            index++
+        ) {
+            // lastPictures.push(pictures[index]); -> .push is not found ???
+        }
+
+        return lastPictures;
+    }
 
     /**
      * @dev Gets first N pictures.
      */
-    function getFirstNPicturesu(int256 count)
+    function getFirstNPictures(uint256 count)
         public
+        view
         returns (Picture[] memory)
-    {}
+    {
+        Picture[] memory firstPictures;
+
+        for (uint256 index = 0; index < pictures.length - count; index++) {
+            // firstPictures.push(pictures[index]); -> .push is not found ???
+        }
+
+        return firstPictures;
+    }
 
     /**
-     * @dev Sets pictures price. Owner only.
+     * @dev Sets picture's ownership price. Owner only.
      * @param pictureId The id of the picture.
      * @param newPrice The new price;
      */
-    function setPrice(string memory pictureId, uint256 newPrice)
+    function setOwnershipPrice(string memory pictureId, uint256 newPrice)
         external
+        view
         isOwner
-    {}
+    {
+        require(pictures.length > 0, "No pictures available");
+
+        Picture memory picture = getPictureById(pictureId);
+        picture.ownershipPrice = newPrice;
+    }
+
+    /**
+     * @dev Sets picture's usage price. Owner only.
+     * @param pictureId The id of the picture.
+     * @param newPrice The new price;
+     */
+    function setUsagePrice(string memory pictureId, uint256 newPrice)
+        external
+        view
+        isOwner
+    {
+        require(pictures.length > 0, "No pictures available");
+
+        Picture memory picture = getPictureById(pictureId);
+        picture.usagePrice = newPrice;
+    }
 
     /**
      * @dev Change selling status.
@@ -146,14 +209,25 @@ contract CopyPasteDoneWrong {
      */
     function setForSale(string memory pictureId, bool newStatus)
         external
+        view
         isOwner
-    {}
+    {
+        require(pictures.length > 0, "No pictures available");
+
+        Picture memory picture = getPictureById(pictureId);
+        picture.forSale = newStatus;
+    }
 
     /**
      * @dev Removes a picture from the database.
      * @param pictureId The id of the picture to be deleted.
      */
-    function deletePicture(string memory pictureId) public isOwner {}
+    function deletePicture(string memory pictureId) public isOwner {
+        require(pictures.length > 0, "No pictures available");
+
+        Picture memory picture = getPictureById(pictureId);
+        delete ownerPictures[picture.ownerId];
+    }
 
     /**
      * @dev Helper function to push a picture into a key/value
@@ -167,20 +241,22 @@ contract CopyPasteDoneWrong {
         ownedPictures.push(pictureToAdd);
         ownerPictures[pictureOwner] = ownedPictures;
         pictures.push(pictureToAdd);
+        owners.push(pictureOwner);
     }
 
     /**
      * @dev Helper function to push a picture into a key/value
      * @param pictureToAdd The picture to be added.
-     * @param pictureOwner The address of the owner.
+     * @param pictureBuyer The address of the buyer.
      */
-    function pushBuyerPicture(Picture memory pictureToAdd, address pictureOwner)
+    function pushBuyerPicture(Picture memory pictureToAdd, address pictureBuyer)
         private
     {
-        Picture[] storage ownedPictures = buyerPictures[pictureOwner];
+        Picture[] storage ownedPictures = buyerPictures[pictureBuyer];
         ownedPictures.push(pictureToAdd);
-        ownerPictures[pictureOwner] = ownedPictures;
+        ownerPictures[pictureBuyer] = ownedPictures;
         pictures.push(pictureToAdd);
+        buyers.push(pictureBuyer);
     }
 
     /**
